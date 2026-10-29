@@ -34,7 +34,7 @@ def get_channel_dna(url):
 
 def generate_script(titles, lang, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-3.8-flash')
     
     if lang == "Urdu/Hindi":
         lang_instruction = "Write a comprehensive, deep-dive video script with rich details, voiceovers in Roman Urdu/Hindi or native Urdu, keeping high engagement."
