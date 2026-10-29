@@ -1,9 +1,8 @@
 import os
 import json
 import time
-import asyncio
 import requests
-import edge_tts
+from gtts import gTTS
 import yt_dlp
 import streamlit as st
 import google.generativeai as genai
@@ -25,11 +24,7 @@ format_type = st.sidebar.selectbox("Video Format", ["Shorts (9:16)", "Long Video
 
 channel_url = st.text_input("🔗 YouTube Channel Link", placeholder="https://www.youtube.com/@ChannelName/videos")
 
-PROGRESS_FILE = "temp/progress.json"
-
 def clear_old_temp_files():
-    if os.path.exists(PROGRESS_FILE):
-        os.remove(PROGRESS_FILE)
     if os.path.exists("Final_Automated_Video.mp4"):
         os.remove("Final_Automated_Video.mp4")
 
@@ -45,9 +40,9 @@ def generate_script_with_retry(titles, lang, api_key):
     model = genai.GenerativeModel('gemini-3.8-flash')
     
     if lang == "Urdu/Hindi":
-        lang_instruction = "Write the entire script, voiceovers in Roman Urdu/Hindi or native Urdu, keeping high engagement."
+        lang_instruction = "Write the script voiceovers in Roman Urdu or simple Hindi, keeping high engagement."
     else:
-        lang_instruction = "Write the entire script, voiceovers in fluent and engaging English."
+        lang_instruction = "Write the script voiceovers in fluent and engaging English."
 
     prompt = f"""
     Analyze these YouTube video titles from the target channel:
@@ -67,7 +62,6 @@ def generate_script_with_retry(titles, lang, api_key):
     }}
     """
     
-    # Retry mechanism for 429 Rate Limit error
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -76,15 +70,15 @@ def generate_script_with_retry(titles, lang, api_key):
             return json.loads(clean_json)
         except Exception as e:
             if "429" in str(e) and attempt < max_retries - 1:
-                st.warning(f"⏳ Rate limit reached (429). Waiting 30 seconds before auto-retrying (Attempt {attempt+1}/{max_retries})...")
+                st.warning(f"⏳ Rate limit reached. Waiting 30 seconds before retrying...")
                 time.sleep(30)
             else:
                 raise e
 
-async def generate_voice(text, filename, lang):
-    voice_name = "ur-PK-AsadNeural" if lang == "Urdu/Hindi" else "en-US-ChristopherNeural"
-    communicate = edge_tts.Communicate(text, voice_name)
-    await communicate.save(filename)
+def generate_voice(text, filename, lang):
+    tlang = 'hi' if lang == "Urdu/Hindi" else 'en'
+    tts = gTTS(text=text, lang=tlang, slow=False)
+    tts.save(filename)
 
 def download_ai_image(prompt, filename, fmt):
     width, height = (1080, 1920) if "9:16" in fmt else (1920, 1080)
@@ -121,7 +115,7 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
                     
                     st.write(f"🎧🖼️ Processing Scene {i+1} of {total_scenes} (Voiceover + AI Visual)...")
                     
-                    asyncio.run(generate_voice(scene["voiceover"], audio_path, language))
+                    generate_voice(scene["voiceover"], audio_path, language)
                     download_ai_image(scene["image_prompt"], img_path, format_type)
                     
                     if os.path.exists(audio_path) and os.path.getsize(audio_path) > 100:
