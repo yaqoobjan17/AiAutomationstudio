@@ -26,6 +26,13 @@ channel_url = st.text_input("🔗 YouTube Channel Link", placeholder="https://ww
 
 PROGRESS_FILE = "temp/progress.json"
 
+def clear_old_temp_files():
+    # Purane corrupt temp files saaf karna taake avcodec error na aaye
+    if os.path.exists(PROGRESS_FILE):
+        os.remove(PROGRESS_FILE)
+    if os.path.exists("Final_Automated_Video.mp4"):
+        os.remove("Final_Automated_Video.mp4")
+
 def save_progress(data):
     os.makedirs("temp", exist_ok=True)
     with open(PROGRESS_FILE, "w") as f:
@@ -46,7 +53,7 @@ def get_channel_dna(url):
 
 def generate_script(titles, lang, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-3.8-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
     if lang == "Urdu/Hindi":
         lang_instruction = "Write the entire script, voiceovers in Roman Urdu/Hindi or native Urdu, keeping high engagement."
@@ -86,46 +93,24 @@ def download_ai_image(prompt, filename, fmt):
     with open(filename, 'wb') as f:
         f.write(img_data)
 
-# Check if previous progress exists
-saved_data = load_progress()
-if saved_data and os.path.exists("Final_Automated_Video.mp4"):
-    st.success("🎉 Previous video session found! You can download it below or generate a new one.")
-    st.video("Final_Automated_Video.mp4")
-    with open("Final_Automated_Video.mp4", "rb") as file:
-        st.download_button(
-            label="📥 Download Final MP4 Video",
-            data=file,
-            file_name="Final_Automated_Video.mp4",
-            mime="video/mp4"
-        )
-
 if st.button("🚀 Generate & Render MP4 Video", type="primary"):
     if not api_key:
         st.error("⚠️ Please enter your Gemini API Key in the sidebar!")
     elif not channel_url:
         st.error("⚠️ Please provide a valid YouTube Channel link!")
     else:
+        # Har naye click par fresh start taake corrupt files ka masla khatam ho
+        clear_old_temp_files()
         os.makedirs("temp", exist_ok=True)
         output_filename = "Final_Automated_Video.mp4"
         
         try:
-            with st.status("🎬 Running Automation Pipeline with Auto-Save...", expanded=True) as status:
+            with st.status("🎬 Running Automation Pipeline...", expanded=True) as status:
+                st.write("🔍 Step 1: Analyzing Channel DNA & Style...")
+                titles = get_channel_dna(channel_url)
                 
-                # Check if script already generated in saved progress
-                progress = load_progress()
-                if not progress or "script_data" not in progress:
-                    st.write("🔍 Step 1: Analyzing Channel DNA & Style...")
-                    titles = get_channel_dna(channel_url)
-                    
-                    st.write(f"✍️ Step 2: Writing New Viral Script in [{language}]...")
-                    script_data = generate_script(titles, language, api_key)
-                    
-                    progress = {"script_data": script_data, "completed_scenes": 0}
-                    save_progress(progress)
-                else:
-                    script_data = progress["script_data"]
-                    st.write("🔄 Resumed from saved script progress...")
-
+                st.write(f"✍️ Step 2: Writing New Viral Script in [{language}]...")
+                script_data = generate_script(titles, language, api_key)
                 st.success(f"Title: {script_data['video_title']}")
                 
                 clips = []
@@ -135,28 +120,22 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
                     audio_path = f"temp/voice_{i}.mp3"
                     img_path = f"temp/img_{i}.jpg"
                     
-                    # Skip already processed scenes if screen disconnected earlier
-                    if i < progress.get("completed_scenes", 0) and os.path.exists(audio_path) and os.path.exists(img_path):
-                        st.write(f"⏩ Skipping Scene {i+1} (Already Processed)...")
-                    else:
-                        st.write(f"🎧🖼️ Processing Scene {i+1} of {total_scenes} (Voiceover + AI Visual)...")
-                        asyncio.run(generate_voice(scene["voiceover"], audio_path, language))
-                        download_ai_image(scene["image_prompt"], img_path, format_type)
-                        
-                        # Update progress after each successful scene
-                        progress["completed_scenes"] = i + 1
-                        save_progress(progress)
+                    st.write(f"🎧🖼️ Processing Scene {i+1} of {total_scenes} (Voiceover + AI Visual)...")
                     
-                    # Verify files and load clips
-                    if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
+                    # Fresh voice and image generation
+                    asyncio.run(generate_voice(scene["voiceover"], audio_path, language))
+                    download_ai_image(scene["image_prompt"], img_path, format_type)
+                    
+                    # Verify generated files
+                    if os.path.exists(audio_path) and os.path.getsize(audio_path) > 100:
                         audio_clip = AudioFileClip(audio_path)
                     else:
-                        raise Exception(f"Audio file for scene {i+1} failed.")
+                        raise Exception(f"Audio file for scene {i+1} was not generated correctly.")
                         
-                    if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                    if os.path.exists(img_path) and os.path.getsize(img_path) > 100:
                         img_clip = ImageClip(img_path).set_duration(audio_clip.duration).set_audio(audio_clip)
                     else:
-                        raise Exception(f"Image file for scene {i+1} failed.")
+                        raise Exception(f"Image file for scene {i+1} was not downloaded correctly.")
                         
                     clips.append(img_clip)
                 
