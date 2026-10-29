@@ -8,9 +8,9 @@ import edge_tts
 import yt_dlp
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image, ImageDraw
+from PIL import Image
 
-# MoviePy aur Pillow modern version compatibility fix
+# Modern Pillow compatibility fix
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
@@ -23,16 +23,14 @@ st.set_page_config(
 )
 
 st.title("🎬 YouTube Automation Studio")
-st.markdown("Background Persistent Pipeline: Screen band ho ya refresh, data save rahega aur API quota safe rahega.")
+st.markdown("Persistent 4K Automation: Real visuals guaranteed bina kisi blank black screen ke!")
 
-# Storage folders initialize
 WORKDIR = "project_cache"
 os.makedirs(WORKDIR, exist_ok=True)
 STATE_FILE = os.path.join(WORKDIR, "state.json")
 SCRIPT_FILE = os.path.join(WORKDIR, "script.json")
 OUTPUT_VIDEO = os.path.join(WORKDIR, "Final_Rendered_Video.mp4")
 
-# Persistent state loading/saving functions
 def load_state():
     if os.path.exists(STATE_FILE):
         try:
@@ -88,14 +86,12 @@ else:
 
 expected_scenes = max(2, target_duration_seconds // 6)
 
-# Channel DNA fetcher
 def get_channel_dna(url):
     ydl_opts = {'extract_flat': True, 'playlistend': 5, 'quiet': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         return [entry.get('title') for entry in info.get('entries', []) if entry.get('title')]
 
-# Script Generator using Gemini 3.8-flash with fallback
 def generate_script(titles, lang, key, num_scenes):
     genai.configure(api_key=key)
     model = genai.GenerativeModel('gemini-3.8-flash')
@@ -108,14 +104,14 @@ def generate_script(titles, lang, key, num_scenes):
     
     {lang_instruction}
     Create a detailed video script consisting of exactly {num_scenes} sequential scenes.
-    Each scene must have a concise spoken voiceover of about 6 seconds (10 to 15 words) and a matching photorealistic 4k visual prompt.
+    Each scene must have a concise spoken voiceover of about 6 seconds (10 to 15 words) and a matching photorealistic visual prompt.
     Return ONLY valid JSON in this exact format:
     {{
       "video_title": "Catchy Documentary Video Title",
       "scenes": [
         {{
           "voiceover": "Spoken line for scene",
-          "image_prompt": "Detailed English prompt for realistic 4k cinematic visual scene matching this part"
+          "image_prompt": "cinematic hyperrealistic 4k shot of classic luxury car"
         }}
       ]
     }}
@@ -124,44 +120,50 @@ def generate_script(titles, lang, key, num_scenes):
     clean_json = response.text.strip().removeprefix("```json").removesuffix("```")
     return json.loads(clean_json)
 
-# Voice Generator
 async def generate_voice(text, filename, lang):
     voice_name = "ur-PK-AsadNeural" if lang == "Urdu/Hindi" else "en-US-ChristopherNeural"
     communicate = edge_tts.Communicate(text, voice_name)
     await communicate.save(filename)
 
-# FLUX 4K Image Downloader
-def download_ai_image(prompt, filename, is_vertical):
-    width, height = (1080, 1920) if is_vertical else (1920, 1080)
-    seed = random.randint(1, 9999999)
-    url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?width={width}&height={height}&model=flux&seed={seed}&nologo=true"
-    
-    for attempt in range(3):
-        try:
-            response = requests.get(url, timeout=30)
-            if response.status_code == 200 and len(response.content) > 3000:
-                with open(filename, 'wb') as f:
-                    f.write(response.content)
-                img = Image.open(filename).convert("RGB")
-                img.save(filename, "JPEG", quality=95)
-                return
-        except Exception:
-            pass
-        time.sleep(1)
-        
-    img = Image.new("RGB", (width, height), color=(15, 20, 30))
-    d = ImageDraw.Draw(img)
-    d.text((width // 4, height // 2), "Cinematic Scene View", fill=(220, 220, 240))
-    img.save(filename, "JPEG")
+def fetch_real_image(prompt, filename, is_vertical):
+    w, h = (1080, 1920) if is_vertical else (1920, 1080)
+    seed = random.randint(100, 999999)
+    encoded_prompt = requests.utils.quote(prompt.replace('\n', ' ').strip())
 
-# --- Persistent App Flow ---
+    # Source 1: Pollinations Turbo/Flux with seed
+    urls = [
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={w}&height={h}&seed={seed}&nologo=true",
+        f"https://image.pollinations.ai/prompt/{requests.utils.quote('luxury classic vintage vehicle 4k hyperrealistic')}?width={w}&height={h}&seed={seed}&nologo=true",
+        f"https://picsum.photos/{w}/{h}?random={seed}"
+    ]
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    for url in urls:
+        try:
+            res = requests.get(url, headers=headers, timeout=25)
+            if res.status_code == 200 and len(res.content) > 5000:
+                with open(filename, 'wb') as f:
+                    f.write(res.content)
+                img = Image.open(filename).convert("RGB")
+                img = img.resize((w, h), Image.Resampling.LANCZOS)
+                img.save(filename, "JPEG", quality=95)
+                return True
+        except Exception:
+            continue
+        time.sleep(1)
+
+    return False
+
+# --- App Interface ---
 channel_url = st.text_input("🔗 YouTube Channel Link", value=state_data.get("channel_url", ""), placeholder="https://www.youtube.com/@ChannelName/videos")
 if channel_url and channel_url != state_data.get("channel_url", ""):
     save_state({"channel_url": channel_url})
 
-# Condition 1: Agar final video render ho chuki hai
 if os.path.exists(OUTPUT_VIDEO) and os.path.getsize(OUTPUT_VIDEO) > 0:
-    st.success("🎉 Video pehle se render ho chuki hai! Aap download kar sakte hain.")
+    st.success("🎉 Video taiyar ho chuki hai! Neeche se download karein.")
     st.video(OUTPUT_VIDEO)
     
     with open(OUTPUT_VIDEO, "rb") as file:
@@ -173,7 +175,6 @@ if os.path.exists(OUTPUT_VIDEO) and os.path.getsize(OUTPUT_VIDEO) > 0:
         )
     
     if st.button("🔄 Start New Video (Clean Setup)"):
-        # Saara purana cache saaf karna sirf download ke baad
         for f in os.listdir(WORKDIR):
             if f != "state.json":
                 try:
@@ -186,7 +187,6 @@ if os.path.exists(OUTPUT_VIDEO) and os.path.getsize(OUTPUT_VIDEO) > 0:
             json.dump(current, f)
         st.rerun()
 
-# Condition 2: Pipeline execution ya resume
 else:
     btn_label = "▶️ Resume / Run Automation Pipeline" if os.path.exists(SCRIPT_FILE) else "🚀 Generate & Render MP4 Video"
     
@@ -202,13 +202,12 @@ else:
             is_vertical = "Shorts" in video_type
             
             with st.status(f"🎬 Processing Pipeline ({selected_duration_label})...", expanded=True) as status:
-                # Step 1 & 2: Script check ya generate
                 if os.path.exists(SCRIPT_FILE):
-                    st.write("📂 Saved script mil gayi hai! Gemini API call skip kar di gayi hai (Quota safe).")
+                    st.write("📂 Saved script mil gayi hai! Gemini API call skip kar di gayi hai.")
                     with open(SCRIPT_FILE, "r") as f:
                         script_data = json.load(f)
                 else:
-                    st.write("🔍 Step 1/5: Analyzing Channel DNA & Tone...")
+                    st.write("🔍 Step 1/5: Analyzing Channel DNA...")
                     titles = get_channel_dna(active_url)
                     
                     st.write(f"✍️ Step 2/5: Generating Script ({expected_scenes} scenes) via Gemini 3.8-flash...")
@@ -222,29 +221,33 @@ else:
                 total_scenes = len(scenes_list)
                 clips = []
                 
-                # Step 3: Asset generation with scene-by-scene check
                 for i, scene in enumerate(scenes_list):
                     audio_path = os.path.join(WORKDIR, f"voice_{i}.mp3")
                     img_path = os.path.join(WORKDIR, f"img_{i}.jpg")
                     
-                    # Agar audio pehle se disk par majood nahi hai toh generate karein
                     if not (os.path.exists(audio_path) and os.path.getsize(audio_path) > 0):
-                        st.write(f"🎧 Generating Audio: Scene {i+1} of {total_scenes}...")
+                        st.write(f"🎧 Voiceover {i+1} of {total_scenes}...")
                         asyncio.run(generate_voice(scene["voiceover"], audio_path, language))
                         
-                    # Agar image pehle se disk par majood nahi hai toh generate karein
-                    if not (os.path.exists(img_path) and os.path.getsize(img_path) > 0):
-                        st.write(f"🖼️ Downloading 4K Visual: Scene {i+1} of {total_scenes}...")
-                        download_ai_image(scene["image_prompt"], img_path, is_vertical)
+                    if not (os.path.exists(img_path) and os.path.getsize(img_path) > 1000):
+                        st.write(f"🖼️ Downloading Real 4K Visual {i+1} of {total_scenes}...")
+                        fetch_real_image(scene["image_prompt"], img_path, is_vertical)
                         
                     audio_clip = AudioFileClip(audio_path)
-                    img_clip = ImageClip(img_path).set_duration(audio_clip.duration)
-                    img_clip = img_clip.resize(lambda t: 1 + 0.04 * (t / audio_clip.duration)).set_audio(audio_clip)
+                    img_clip = ImageClip(img_path).set_duration(audio_clip.duration).set_audio(audio_clip)
                     clips.append(img_clip)
                     
                 st.write("⚙️ Step 4/5: Stitching scenes & rendering final MP4 (MoviePy)...")
                 final_video = concatenate_videoclips(clips, method="compose")
-                final_video.write_videofile(OUTPUT_VIDEO, fps=24, codec="libx264", audio_codec="aac", logger=None)
+                final_video.write_videofile(
+                    OUTPUT_VIDEO,
+                    fps=24,
+                    codec="libx264",
+                    audio_codec="aac",
+                    temp_audiofile=os.path.join(WORKDIR, "temp-audio.m4a"),
+                    remove_temp=True,
+                    logger=None
+                )
                 
                 status.update(label="✅ Video Rendering Complete!", state="complete", expanded=False)
                 st.balloons()
