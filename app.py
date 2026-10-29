@@ -6,6 +6,7 @@ import edge_tts
 import yt_dlp
 import streamlit as st
 import google.generativeai as genai
+from PIL import Image
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 st.set_page_config(
@@ -33,7 +34,7 @@ def get_channel_dna(url):
 
 def generate_script(titles, lang, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-3.8-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
     if lang == "Urdu/Hindi":
         lang_instruction = "Write the entire script, voiceovers in Roman Urdu/Hindi or native Urdu, keeping high engagement."
@@ -72,6 +73,10 @@ def download_ai_image(prompt, filename, fmt):
     img_data = requests.get(url).content
     with open(filename, 'wb') as f:
         f.write(img_data)
+    
+    # Ensure image is converted properly and saved as standard RGB JPEG
+    img = Image.open(filename).convert("RGB")
+    img.save(filename, "JPEG")
 
 if st.button("🚀 Generate & Render MP4 Video", type="primary"):
     if not api_key:
