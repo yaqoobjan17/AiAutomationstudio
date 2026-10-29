@@ -7,6 +7,11 @@ import yt_dlp
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image, ImageDraw
+
+# Compatibility patch for MoviePy with modern Pillow versions
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 st.set_page_config(
@@ -19,7 +24,7 @@ st.title("🎬 YouTube Automation Studio")
 st.markdown("Generate professional long-form automated videos with multiple fast-paced scenes and animated zoom visuals!")
 
 st.sidebar.header("⚙️ Configuration")
-api_key = st.sidebar.text_input("Gemini API Key", type="password", help="Enter your free Google Gemini API key.")
+api_key = st.sidebar.text_input("Gemini API Key", type="password", help="Enter your Google Gemini API key.")
 language = st.sidebar.selectbox("Select Language", ["English", "Urdu/Hindi"])
 format_type = st.sidebar.selectbox("Video Format", ["Shorts (9:16)", "Long Video (16:9)"])
 
@@ -34,6 +39,7 @@ def get_channel_dna(url):
 
 def generate_script(titles, lang, api_key):
     genai.configure(api_key=api_key)
+    # Using Gemini 3.8 as per your strict instruction
     model = genai.GenerativeModel('gemini-3.8-flash')
     
     if lang == "Urdu/Hindi":
@@ -74,7 +80,7 @@ def download_ai_image(prompt, filename, fmt):
     try:
         response = requests.get(url, timeout=20)
         if response.status_code == 200 and len(response.content) > 1000:
-            with open(filename, 'wb' ) as f:
+            with open(filename, 'wb') as f:
                 f.write(response.content)
             img = Image.open(filename).convert("RGB")
             img.save(filename, "JPEG")
@@ -123,9 +129,8 @@ if st.button("🚀 Generate Animated Long-Form Video", type="primary"):
                         raise Exception(f"Audio file for scene {i+1} failed.")
                         
                     if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
-                        # Create Image clip with smooth zoom animation effect (Ken Burns style)
+                        # Create Image clip with smooth zoom animation effect
                         img_clip = ImageClip(img_path).set_duration(audio_clip.duration)
-                        # Smooth zoom-in over time
                         img_clip = img_clip.resize(lambda t: 1 + 0.04 * (t / audio_clip.duration)).set_audio(audio_clip)
                     else:
                         raise Exception(f"Image file for scene {i+1} failed.")
