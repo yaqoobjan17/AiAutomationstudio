@@ -6,7 +6,7 @@ import edge_tts
 import yt_dlp
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image
+from PIL import Image, ImageDraw
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 st.set_page_config(
@@ -70,12 +70,23 @@ async def generate_voice(text, filename, lang):
 def download_ai_image(prompt, filename, fmt):
     width, height = (1080, 1920) if "9:16" in fmt else (1920, 1080)
     url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?width={width}&height={height}&nologo=true"
-    img_data = requests.get(url).content
-    with open(filename, 'wb') as f:
-        f.write(img_data)
     
-    # Ensure image is converted properly and saved as standard RGB JPEG
-    img = Image.open(filename).convert("RGB")
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200 and len(response.content) > 1000:
+            with open(filename, 'wb') as f:
+                f.write(response.content)
+            # Verify image can be opened
+            img = Image.open(filename).convert("RGB")
+            img.save(filename, "JPEG")
+            return
+    except Exception:
+        pass
+    
+    # Fallback: Create a clean fallback image if download fails
+    img = Image.new("RGB", (width, height), color=(20, 20, 30))
+    d = ImageDraw.Draw(img)
+    d.text((width//10, height//2), "AI Visual Scene", fill=(255, 255, 255))
     img.save(filename, "JPEG")
 
 if st.button("🚀 Generate & Render MP4 Video", type="primary"):
