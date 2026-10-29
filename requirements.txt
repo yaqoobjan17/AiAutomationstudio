@@ -2,6 +2,7 @@ streamlit
 pydub
 gtts
 yt-dlp
+moviepy
 google-generativeai
 pillow
 numpy
