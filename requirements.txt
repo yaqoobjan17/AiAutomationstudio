@@ -1,8 +1,7 @@
 streamlit
-google-generativeai
-gtts
-yt-dlp
-moviepy==1.0.3
+pydub
+google-genai
+pillow
+numpy
+pandas
 requests
-imageio[pyav]
-opencv-python
