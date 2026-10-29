@@ -1,6 +1,7 @@
 streamlit
 pydub
 gtts
+yt-dlp
 google-genai
 pillow
 numpy
