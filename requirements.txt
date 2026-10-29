@@ -4,3 +4,5 @@ edge-tts
 yt-dlp
 moviepy==1.0.3
 requests
+imageio[pyav]
+opencv-python
