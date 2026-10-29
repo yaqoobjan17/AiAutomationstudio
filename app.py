@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("🎬 YouTube Automation Studio")
-st.markdown("Paste any channel link, pick your language & format, and generate a complete rendered **MP4 Video** instantly!")
+st.markdown("Generate professional long-form automated videos with multiple fast-paced scenes and animated zoom visuals!")
 
 st.sidebar.header("⚙️ Configuration")
 api_key = st.sidebar.text_input("Gemini API Key", type="password", help="Enter your free Google Gemini API key.")
@@ -34,26 +34,26 @@ def get_channel_dna(url):
 
 def generate_script(titles, lang, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-3.8-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
     if lang == "Urdu/Hindi":
-        lang_instruction = "Write the entire script, voiceovers in Roman Urdu/Hindi or native Urdu, keeping high engagement."
+        lang_instruction = "Write a comprehensive, deep-dive video script with rich details, voiceovers in Roman Urdu/Hindi or native Urdu, keeping high engagement."
     else:
-        lang_instruction = "Write the entire script, voiceovers in fluent and engaging English."
+        lang_instruction = "Write a comprehensive, deep-dive video script with rich details, voiceovers in fluent and engaging English."
 
     prompt = f"""
-    Analyze these YouTube video titles from the target channel:
+    Analyze these YouTube video titles from the target channel for style and tone:
     {titles}
     
     {lang_instruction}
-    Create 1 viral video script with 3 short scenes based on this DNA. Keep voiceover text concise.
+    Create a detailed long-form video script consisting of 15 to 20 short, fast-paced scenes (each scene should have a concise 5 to 7 second voiceover line) based on this DNA.
     Return ONLY valid JSON in this exact format:
     {{
-      "video_title": "Catchy Video Title",
+      "video_title": "Catchy Documentary Video Title",
       "scenes": [
         {{
-          "voiceover": "Short spoken line for scene 1",
-          "image_prompt": "Detailed English prompt for realistic 4k visual scene"
+          "voiceover": "Short spoken line for scene",
+          "image_prompt": "Detailed English prompt for realistic 4k cinematic visual scene matching this part"
         }}
       ]
     }}
@@ -72,38 +72,37 @@ def download_ai_image(prompt, filename, fmt):
     url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?width={width}&height={height}&nologo=true"
     
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=20)
         if response.status_code == 200 and len(response.content) > 1000:
-            with open(filename, 'wb') as f:
+            with open(filename, 'wb' ) as f:
                 f.write(response.content)
-            # Verify image can be opened
             img = Image.open(filename).convert("RGB")
             img.save(filename, "JPEG")
             return
     except Exception:
         pass
     
-    # Fallback: Create a clean fallback image if download fails
-    img = Image.new("RGB", (width, height), color=(20, 20, 30))
+    # Fallback image
+    img = Image.new("RGB", (width, height), color=(15, 15, 25))
     d = ImageDraw.Draw(img)
-    d.text((width//10, height//2), "AI Visual Scene", fill=(255, 255, 255))
+    d.text((width//10, height//2), "Cinematic Visual", fill=(255, 255, 255))
     img.save(filename, "JPEG")
 
-if st.button("🚀 Generate & Render MP4 Video", type="primary"):
+if st.button("🚀 Generate Animated Long-Form Video", type="primary"):
     if not api_key:
         st.error("⚠️ Please enter your Gemini API Key in the sidebar!")
     elif not channel_url:
         st.error("⚠️ Please provide a valid YouTube Channel link!")
     else:
         os.makedirs("temp", exist_ok=True)
-        output_filename = "Final_Automated_Video.mp4"
+        output_filename = "Final_Animated_Documentary.mp4"
         
         try:
-            with st.status("🎬 Running Automation Pipeline...", expanded=True) as status:
+            with st.status("🎬 Running Advanced Automation Pipeline...", expanded=True) as status:
                 st.write("🔍 Step 1/5: Analyzing Channel DNA & Style...")
                 titles = get_channel_dna(channel_url)
                 
-                st.write(f"✍️ Step 2/5: Writing New Viral Script in [{language}]...")
+                st.write(f"✍️ Step 2/5: Writing Multi-Scene Script (15+ Scenes) in [{language}]...")
                 script_data = generate_script(titles, language, api_key)
                 st.success(f"Title: {script_data['video_title']}")
                 
@@ -111,35 +110,36 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
                 total_scenes = len(script_data["scenes"])
                 
                 for i, scene in enumerate(script_data["scenes"]):
-                    st.write(f"🎧🖼️ Step 3/5: Processing Scene {i+1} of {total_scenes} (Voiceover + AI Visual)...")
+                    st.write(f"🎧🖼️ Step 3/5: Processing Scene {i+1} of {total_scenes} (Voice + Animated Visual)...")
                     audio_path = f"temp/voice_{i}.mp3"
                     img_path = f"temp/img_{i}.jpg"
                     
-                    # Generate Voice & Image safely
                     asyncio.run(generate_voice(scene["voiceover"], audio_path, language))
                     download_ai_image(scene["image_prompt"], img_path, format_type)
                     
-                    # Verify files exist and are not empty
                     if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
                         audio_clip = AudioFileClip(audio_path)
                     else:
-                        raise Exception(f"Audio file for scene {i+1} failed to generate properly.")
+                        raise Exception(f"Audio file for scene {i+1} failed.")
                         
                     if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
-                        img_clip = ImageClip(img_path).set_duration(audio_clip.duration).set_audio(audio_clip)
+                        # Create Image clip with smooth zoom animation effect (Ken Burns style)
+                        img_clip = ImageClip(img_path).set_duration(audio_clip.duration)
+                        # Smooth zoom-in over time
+                        img_clip = img_clip.resize(lambda t: 1 + 0.04 * (t / audio_clip.duration)).set_audio(audio_clip)
                     else:
-                        raise Exception(f"Image file for scene {i+1} failed to download properly.")
+                        raise Exception(f"Image file for scene {i+1} failed.")
                         
                     clips.append(img_clip)
                 
-                st.write("⚙️ Step 4/5: Stitching scenes & rendering final MP4 (MoviePy)...")
+                st.write("⚙️ Step 4/5: Stitching all animated scenes & rendering final MP4...")
                 final_video = concatenate_videoclips(clips, method="compose")
                 final_video.write_videofile(output_filename, fps=24, codec="libx264", audio_codec="aac", logger=None)
                 
                 status.update(label="✅ Video Rendering Complete!", state="complete", expanded=False)
             
             st.balloons()
-            st.success("🎉 Your video is ready!")
+            st.success("🎉 Aapki animated documentary video taiyar hai!")
             st.video(output_filename)
             
             with open(output_filename, "rb") as file:
