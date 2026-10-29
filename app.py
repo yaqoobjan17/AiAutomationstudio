@@ -7,6 +7,7 @@ import yt_dlp
 import streamlit as st
 import google.generativeai as genai
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+from pydub import AudioSegment  # MP3 ko WAV mein badalne ke liye
 
 st.set_page_config(
     page_title="YT Automation Studio",
@@ -75,10 +76,17 @@ def generate_script_with_retry(titles, lang, api_key):
             else:
                 raise e
 
-def generate_voice(text, filename, lang):
+def generate_voice(text, wav_filename, lang):
     tlang = 'hi' if lang == "Urdu/Hindi" else 'en'
+    temp_mp3 = "temp_voice.mp3"
     tts = gTTS(text=text, lang=tlang, slow=False)
-    tts.save(filename)
+    tts.save(temp_mp3)
+    
+    # Convert MP3 to WAV to completely prevent avcodec errors in MoviePy
+    sound = AudioSegment.from_mp3(temp_mp3)
+    sound.export(wav_filename, format="wav")
+    if os.path.exists(temp_mp3):
+        os.remove(temp_mp3)
 
 def download_ai_image(prompt, filename, fmt):
     width, height = (1080, 1920) if "9:16" in fmt else (1920, 1080)
@@ -110,7 +118,7 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
                 total_scenes = len(script_data["scenes"])
                 
                 for i, scene in enumerate(script_data["scenes"]):
-                    audio_path = f"temp/voice_{i}.mp3"
+                    audio_path = f"temp/voice_{i}.wav" # WAV format for bulletproof rendering
                     img_path = f"temp/img_{i}.jpg"
                     
                     st.write(f"🎧🖼️ Processing Scene {i+1} of {total_scenes} (Voiceover + AI Visual)...")
