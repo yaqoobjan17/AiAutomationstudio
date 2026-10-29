@@ -1,10 +1,4 @@
 streamlit
 yt-dlp
-edge-tts
-moviepy==1.0.3
 google-generativeai
-requests
-pillow
-imageio[pyav]
-numpy
-pandas
+
