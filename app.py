@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import asyncio
 import requests
 import edge_tts
@@ -27,22 +28,10 @@ channel_url = st.text_input("🔗 YouTube Channel Link", placeholder="https://ww
 PROGRESS_FILE = "temp/progress.json"
 
 def clear_old_temp_files():
-    # Purane corrupt temp files saaf karna taake avcodec error na aaye
     if os.path.exists(PROGRESS_FILE):
         os.remove(PROGRESS_FILE)
     if os.path.exists("Final_Automated_Video.mp4"):
         os.remove("Final_Automated_Video.mp4")
-
-def save_progress(data):
-    os.makedirs("temp", exist_ok=True)
-    with open(PROGRESS_FILE, "w") as f:
-        json.dump(data, f)
-
-def load_progress():
-    if os.path.exists(PROGRESS_FILE):
-        with open(PROGRESS_FILE, "r") as f:
-            return json.load(f)
-    return None
 
 def get_channel_dna(url):
     ydl_opts = {'extract_flat': True, 'playlistend': 5, 'quiet': True}
@@ -51,7 +40,7 @@ def get_channel_dna(url):
         titles = [entry.get('title') for entry in info.get('entries', []) if entry.get('title')]
     return titles
 
-def generate_script(titles, lang, api_key):
+def generate_script_with_retry(titles, lang, api_key):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-3.8-flash')
     
@@ -77,9 +66,20 @@ def generate_script(titles, lang, api_key):
       ]
     }}
     """
-    response = model.generate_content(prompt)
-    clean_json = response.text.strip().removeprefix("```json").removesuffix("```")
-    return json.loads(clean_json)
+    
+    # Retry mechanism for 429 Rate Limit error
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(prompt)
+            clean_json = response.text.strip().removeprefix("```json").removesuffix("```")
+            return json.loads(clean_json)
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                st.warning(f"⏳ Rate limit reached (429). Waiting 30 seconds before auto-retrying (Attempt {attempt+1}/{max_retries})...")
+                time.sleep(30)
+            else:
+                raise e
 
 async def generate_voice(text, filename, lang):
     voice_name = "ur-PK-AsadNeural" if lang == "Urdu/Hindi" else "en-US-ChristopherNeural"
@@ -99,7 +99,6 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
     elif not channel_url:
         st.error("⚠️ Please provide a valid YouTube Channel link!")
     else:
-        # Har naye click par fresh start taake corrupt files ka masla khatam ho
         clear_old_temp_files()
         os.makedirs("temp", exist_ok=True)
         output_filename = "Final_Automated_Video.mp4"
@@ -109,8 +108,8 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
                 st.write("🔍 Step 1: Analyzing Channel DNA & Style...")
                 titles = get_channel_dna(channel_url)
                 
-                st.write(f"✍️ Step 2: Writing New Viral Script in [{language}]...")
-                script_data = generate_script(titles, language, api_key)
+                st.write(f"✍️ Step 2: Writing New Viral Script in [{language}] (using Gemini 3.8)...")
+                script_data = generate_script_with_retry(titles, language, api_key)
                 st.success(f"Title: {script_data['video_title']}")
                 
                 clips = []
@@ -122,11 +121,9 @@ if st.button("🚀 Generate & Render MP4 Video", type="primary"):
                     
                     st.write(f"🎧🖼️ Processing Scene {i+1} of {total_scenes} (Voiceover + AI Visual)...")
                     
-                    # Fresh voice and image generation
                     asyncio.run(generate_voice(scene["voiceover"], audio_path, language))
                     download_ai_image(scene["image_prompt"], img_path, format_type)
                     
-                    # Verify generated files
                     if os.path.exists(audio_path) and os.path.getsize(audio_path) > 100:
                         audio_clip = AudioFileClip(audio_path)
                     else:
