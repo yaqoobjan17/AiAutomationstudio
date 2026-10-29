@@ -1,0 +1,6 @@
+streamlit
+google-generativeai
+edge-tts
+yt-dlp
+moviepy
+requests
